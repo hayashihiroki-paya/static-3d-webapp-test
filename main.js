@@ -1,11 +1,17 @@
 import * as THREE from "three";
 
 // ================================
+// スマホ判定（確実に動く版）
+// ================================
+const isMobile =
+  window.innerWidth < 900 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// ================================
 // 基本セットアップ
 // ================================
 const canvas = document.getElementById("canvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-resizeRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x222222);
@@ -16,9 +22,6 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-
-// スマホ判定（画面幅ベース）
-const isMobile = window.innerWidth < 768;
 
 // ================================
 // ライト
@@ -53,7 +56,7 @@ const JUMP_POWER = 0.22;
 const GRAVITY = -0.012;
 
 // ================================
-// 障害物（縦長に配置）
+// 障害物
 // ================================
 const obstacles = [];
 
@@ -84,7 +87,7 @@ goal.position.set(0, 1, 30);
 scene.add(goal);
 
 // ================================
-// キー入力（PC用）
+// PC用キー入力
 // ================================
 const keys = {};
 window.addEventListener("keydown", (e) => (keys[e.key] = true));
@@ -135,15 +138,19 @@ window.addEventListener("keydown", (e) => {
 });
 
 // ================================
-// スマホUIのセットアップ
+// スマホUIの表示制御
 // ================================
 const mobileControls = document.getElementById("mobile-controls");
 
-if (!isMobile) {
-  // PCならUIを非表示
-  mobileControls.style.display = "none";
+if (isMobile) {
+  mobileControls.style.display = "flex";  // ← スマホなら必ず表示
+} else {
+  mobileControls.style.display = "none";  // PCは非表示
 }
 
+// ================================
+// スマホ用タッチ入力
+// ================================
 const touchState = {
   up: false,
   down: false,
@@ -184,14 +191,10 @@ if (isMobile) {
 // リサイズ対応
 // ================================
 window.addEventListener("resize", () => {
-  resizeRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 });
-
-function resizeRenderer() {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
 
 // ================================
 // ゲームループ
@@ -199,17 +202,12 @@ function resizeRenderer() {
 function animate() {
   requestAnimationFrame(animate);
 
-  // 入力（PC＋スマホ統合）
-  const moveForward =
-    keys["w"] || keys["ArrowUp"] || (isMobile && touchState.up);
-  const moveBackward =
-    keys["s"] || keys["ArrowDown"] || (isMobile && touchState.down);
-  const moveLeft =
-    keys["a"] || keys["ArrowLeft"] || (isMobile && touchState.left);
-  const moveRight =
-    keys["d"] || keys["ArrowRight"] || (isMobile && touchState.right);
-  const jumpKey =
-    keys[" "] || keys["Space"] || (isMobile && touchState.jump);
+  // PC + スマホ統合入力
+  const moveForward = keys["w"] || keys["ArrowUp"] || touchState.up;
+  const moveBackward = keys["s"] || keys["ArrowDown"] || touchState.down;
+  const moveLeft = keys["a"] || keys["ArrowLeft"] || touchState.left;
+  const moveRight = keys["d"] || keys["ArrowRight"] || touchState.right;
+  const jumpKey = keys[" "] || keys["Space"] || touchState.jump;
 
   if (moveForward) player.position.z += MOVE_SPEED;
   if (moveBackward) player.position.z -= MOVE_SPEED;
@@ -245,7 +243,7 @@ function animate() {
     showClear();
   }
 
-  // カメラ（スマホ向け見下ろし＋追従）
+  // カメラ追従（スマホ向け見下ろし）
   camera.position.x = player.position.x;
   camera.position.y = player.position.y + 10;
   camera.position.z = player.position.z - 15;
