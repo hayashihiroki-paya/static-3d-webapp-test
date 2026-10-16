@@ -17,8 +17,6 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 10, 15);
-camera.lookAt(0, 0, 0);
 
 // ================================
 // ライト
@@ -47,34 +45,51 @@ const player = new THREE.Mesh(
 player.position.set(0, 0.5, 0);
 scene.add(player);
 
-// プレイヤー物理パラメータ
 let velocityY = 0;
 const MOVE_SPEED = 0.08;
 const JUMP_POWER = 0.18;
 const GRAVITY = -0.01;
 
 // ================================
-// 障害物
+// 動く障害物
 // ================================
-const obstacles = [];
+const movingObstacles = [];
 
-function addObstacle(x, y, z) {
+function addMovingObstacle(x, y, z) {
   const box = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshStandardMaterial({ color: 0xff4444 })
   );
   box.position.set(x, y, z);
+  box.userData = { dir: 1 };
   scene.add(box);
-  obstacles.push(box);
+  movingObstacles.push(box);
 }
 
-addObstacle(5, 0.5, -2);
-addObstacle(10, 0.5, 1);
-addObstacle(15, 0.5, -3);
+addMovingObstacle(6, 0.5, -2);
+addMovingObstacle(12, 0.5, 1);
 
 // ================================
-// ゴール
+// 落ちる床
 // ================================
+const fallingFloors = [];
+
+function addFallingFloor(x, z) {
+  const f = new THREE.Mesh(
+    new THREE.BoxGeometry(3, 0.2, 3),
+    new THREE.MeshStandardMaterial({ color: 0x5555ff })
+  );
+  f.position.set(x, 0.1, z);
+  f.userData = { fall: false, vy: 0 };
+  scene.add(f);
+  fallingFloors.push(f);
+}
+
+addFallingFloor(8, -1);
+addFallingFloor(14, 2);
+
+// ================================
+// ゴール（回転する）
 const goal = new THREE.Mesh(
   new THREE.BoxGeometry(2, 2, 2),
   new THREE.MeshStandardMaterial({ color: 0x44ff44 })
@@ -115,12 +130,30 @@ function showClear() {
 }
 
 // ================================
+// リスタート
+// ================================
+function resetGame() {
+  player.position.set(0, 0.5, 0);
+  velocityY = 0;
+
+  fallingFloors.forEach((f) => {
+    f.position.y = 0.1;
+    f.userData.fall = false;
+    f.userData.vy = 0;
+  });
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "r") resetGame();
+});
+
+// ================================
 // ゲームループ
 // ================================
 function animate() {
   requestAnimationFrame(animate);
 
-  // 移動処理
+  // プレイヤー移動
   if (keys["w"]) player.position.z -= MOVE_SPEED;
   if (keys["s"]) player.position.z += MOVE_SPEED;
   if (keys["a"]) player.position.x -= MOVE_SPEED;
@@ -141,18 +174,39 @@ function animate() {
     velocityY = 0;
   }
 
-  // 障害物衝突
-  for (const obs of obstacles) {
-    if (isColliding(player, obs)) {
-      player.position.set(0, 0.5, 0); // リセット
-      velocityY = 0;
+  // 動く障害物の移動
+  movingObstacles.forEach((obs) => {
+    obs.position.x += 0.05 * obs.userData.dir;
+    if (obs.position.x > obs.position.x + 2) obs.userData.dir = -1;
+    if (obs.position.x < obs.position.x - 2) obs.userData.dir = 1;
+
+    if (isColliding(player, obs)) resetGame();
+  });
+
+  // 落ちる床
+  fallingFloors.forEach((f) => {
+    if (!f.userData.fall && isColliding(player, f)) {
+      f.userData.fall = true;
     }
-  }
+    if (f.userData.fall) {
+      f.userData.vy -= 0.005;
+      f.position.y += f.userData.vy;
+    }
+  });
+
+  // ゴール回転
+  goal.rotation.y += 0.02;
 
   // ゴール判定
   if (isColliding(player, goal)) {
     showClear();
   }
+
+  // カメラ追従
+  camera.position.x = player.position.x + 5;
+  camera.position.y = player.position.y + 6;
+  camera.position.z = player.position.z + 10;
+  camera.lookAt(player.position);
 
   renderer.render(scene, camera);
 }
