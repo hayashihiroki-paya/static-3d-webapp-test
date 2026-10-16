@@ -2,7 +2,9 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>3D Mini Game - Extended</title>
+  <title>3D Mini Game - Mobile UI</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <script type="importmap">
   {
@@ -12,10 +14,103 @@
     }
   }
   </script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: system-ui, sans-serif;
+    }
+
+    #canvas {
+      display: block;
+    }
+
+    /* スマホ用操作UI */
+    #mobile-controls {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none; /* ボタン以外はクリック不可 */
+    }
+
+    .control-group {
+      pointer-events: auto;
+    }
+
+    .btn {
+      width: 60px;
+      height: 60px;
+      margin: 5px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 24px;
+      backdrop-filter: blur(4px);
+    }
+
+    .btn:active {
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    #move-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 60px);
+      grid-template-rows: repeat(3, 60px);
+      justify-items: center;
+      align-items: center;
+    }
+
+    #move-pad .empty {
+      visibility: hidden;
+    }
+
+    #jump-group {
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+    }
+
+    #jump-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      font-size: 20px;
+    }
+  </style>
 </head>
 
-<body style="margin:0; overflow:hidden;">
+<body>
   <canvas id="canvas"></canvas>
+
+  <!-- スマホ用操作UI -->
+  <div id="mobile-controls">
+    <div class="control-group" id="move-group">
+      <div id="move-pad">
+        <button class="btn empty"></button>
+        <button class="btn" id="btn-up">⬆️</button>
+        <button class="btn empty"></button>
+
+        <button class="btn" id="btn-left">⬅️</button>
+        <button class="btn empty"></button>
+        <button class="btn" id="btn-right">➡️</button>
+
+        <button class="btn empty"></button>
+        <button class="btn" id="btn-down">⬇️</button>
+        <button class="btn empty"></button>
+      </div>
+    </div>
+
+    <div class="control-group" id="jump-group">
+      <button class="btn" id="jump-btn">JUMP</button>
+    </div>
+  </div>
+
   <script type="module" src="main.js"></script>
 </body>
 </html>
