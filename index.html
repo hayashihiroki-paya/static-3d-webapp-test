@@ -35,7 +35,8 @@
       right: 20px;
       display: flex;
       justify-content: space-between;
-      pointer-events: none; /* ボタン以外はクリック不可 */
+      pointer-events: auto; /* ← 修正 */
+      z-index: 9999;        /* ← スマホで埋もれないように */
     }
 
     .control-group {
