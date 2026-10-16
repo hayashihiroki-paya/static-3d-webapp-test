@@ -106,9 +106,11 @@ function resetGame(){
 }
 window.addEventListener("keydown", e => { if(e.key === "r") resetGame(); });
 
-// モバイルUI要素
+// モバイルUI表示制御
 const mobileControls = document.getElementById("mobile-controls");
-if(isMobile) mobileControls.style.display = "flex"; else mobileControls.style.display = "none";
+if(mobileControls) {
+  if(isMobile) mobileControls.style.display = "flex"; else mobileControls.style.display = "none";
+}
 
 // ジャンプボタン（タッチ）
 const jumpBtn = document.getElementById("jump-btn");
@@ -117,22 +119,21 @@ if(jumpBtn){
   jumpBtn.addEventListener("touchstart", e => { e.preventDefault(); jumpPressed = true; }, { passive:false });
   jumpBtn.addEventListener("touchend", e => { e.preventDefault(); jumpPressed = false; }, { passive:false });
   jumpBtn.addEventListener("touchcancel", e => { e.preventDefault(); jumpPressed = false; }, { passive:false });
-  // クリックでも動くように
+  // マウス対応（デバッグ）
   jumpBtn.addEventListener("mousedown", () => jumpPressed = true);
   window.addEventListener("mouseup", () => jumpPressed = false);
 }
 
-// 仮想スティック実装（左スティック）
+// 仮想スティック（pointer events を優先）
 const stickArea = document.getElementById("stick-area");
 const stickKnob = document.getElementById("stick-knob");
 const stickBase = document.getElementById("stick-base");
 
 const joystick = { x: 0, z: 0 }; // x:左右（+右）, z:前後（+前）
-let activeTouchId = null;
+let activePointerId = null;
 let stickCenter = { x:0, y:0 };
 const MAX_RADIUS = 40; // ノブの最大移動半径(px)
 
-// 初期センター計算（ページロード時）
 function updateStickCenter(){
   if(!stickBase) return;
   const rect = stickBase.getBoundingClientRect();
@@ -142,89 +143,92 @@ function updateStickCenter(){
 updateStickCenter();
 window.addEventListener("resize", updateStickCenter);
 
-// タッチハンドラ
-function onStickTouchStart(e){
-  e.preventDefault();
-  const t = e.changedTouches[0];
-  activeTouchId = t.identifier;
-  updateStickFromTouch(t);
+// pointer イベントハンドラ（対応ブラウザで最も安定）
+function handlePointerDown(e){
+  if(activePointerId !== null) return;
+  activePointerId = e.pointerId;
+  e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId);
+  updateStickFromPoint(e.clientX, e.clientY);
 }
-function onStickTouchMove(e){
-  e.preventDefault();
-  if(activeTouchId === null) return;
-  for(const t of e.changedTouches){
-    if(t.identifier === activeTouchId){
-      updateStickFromTouch(t);
-      break;
-    }
-  }
+function handlePointerMove(e){
+  if(activePointerId === null) return;
+  if(e.pointerId !== activePointerId) return;
+  updateStickFromPoint(e.clientX, e.clientY);
 }
-function onStickTouchEnd(e){
-  e.preventDefault();
-  if(activeTouchId === null) return;
-  for(const t of e.changedTouches){
-    if(t.identifier === activeTouchId){
-      activeTouchId = null;
-      joystick.x = 0; joystick.z = 0;
-      resetKnob();
-      break;
-    }
-  }
+function handlePointerUp(e){
+  if(e.pointerId !== activePointerId) return;
+  activePointerId = null;
+  joystick.x = 0; joystick.z = 0;
+  resetKnob();
 }
 
-function updateStickFromTouch(touch){
-  const dx = touch.clientX - stickCenter.x;
-  const dy = touch.clientY - stickCenter.y;
-  // スクリーンYは下方向が増えるので、前方向（z+) は dy < 0
-  // ここで z = -dy / MAX_RADIUS
+function updateStickFromPoint(clientX, clientY){
+  const dx = clientX - stickCenter.x;
+  const dy = clientY - stickCenter.y;
+  // スクリーンYは下方向が増えるので、上にドラッグで前進（z増加）
   let nx = dx / MAX_RADIUS;
   let nz = -dy / MAX_RADIUS;
-  // clamp
   const len = Math.hypot(nx, nz);
-  if(len > 1){
-    nx /= len; nz /= len;
-  }
-  joystick.x = nx; joystick.z = nz;
-  // ノブ移動（ピクセル）
+  if(len > 1){ nx /= len; nz /= len; }
+  joystick.x = nx;
+  joystick.z = nz;
   const knobX = Math.max(-MAX_RADIUS, Math.min(MAX_RADIUS, dx));
   const knobY = Math.max(-MAX_RADIUS, Math.min(MAX_RADIUS, dy));
-  stickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
-  stickKnob.style.background = "rgba(255,255,255,0.32)";
+  if(stickKnob) stickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+  if(stickKnob) stickKnob.style.background = "rgba(255,255,255,0.32)";
 }
-
 function resetKnob(){
-  stickKnob.style.transform = `translate(-50%,-50%)`;
-  stickKnob.style.background = "rgba(255,255,255,0.22)";
+  if(stickKnob) stickKnob.style.transform = `translate(-50%,-50%)`;
+  if(stickKnob) stickKnob.style.background = "rgba(255,255,255,0.22)";
 }
 
-// バインド
+// バインド（pointer対応がなければ touch/mouse にフォールバック）
 if(stickArea){
-  stickArea.addEventListener("touchstart", onStickTouchStart, { passive:false });
-  window.addEventListener("touchmove", onStickTouchMove, { passive:false });
-  window.addEventListener("touchend", onStickTouchEnd, { passive:false });
-  window.addEventListener("touchcancel", onStickTouchEnd, { passive:false });
+  if(window.PointerEvent){
+    stickArea.addEventListener("pointerdown", handlePointerDown, { passive:false });
+    window.addEventListener("pointermove", handlePointerMove, { passive:false });
+    window.addEventListener("pointerup", handlePointerUp, { passive:false });
+    window.addEventListener("pointercancel", handlePointerUp, { passive:false });
+  } else {
+    // touch fallback
+    stickArea.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      activePointerId = t.identifier;
+      updateStickFromPoint(t.clientX, t.clientY);
+    }, { passive:false });
+    window.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      if(activePointerId === null) return;
+      for(const t of e.changedTouches){
+        if(t.identifier === activePointerId){
+          updateStickFromPoint(t.clientX, t.clientY);
+          break;
+        }
+      }
+    }, { passive:false });
+    window.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      activePointerId = null;
+      joystick.x = 0; joystick.z = 0;
+      resetKnob();
+    }, { passive:false });
+    window.addEventListener("touchcancel", (e) => {
+      e.preventDefault();
+      activePointerId = null;
+      joystick.x = 0; joystick.z = 0;
+      resetKnob();
+    }, { passive:false });
 
-  // マウスでも試せるように（デバッグ用）
-  let mouseDown = false;
-  stickArea.addEventListener("mousedown", (e) => {
-    mouseDown = true;
-    activeTouchId = "mouse";
-    updateStickFromMouse(e);
-  });
-  window.addEventListener("mousemove", (e) => { if(mouseDown) updateStickFromMouse(e); });
-  window.addEventListener("mouseup", () => { if(mouseDown){ mouseDown=false; activeTouchId=null; joystick.x=0; joystick.z=0; resetKnob(); } });
-  function updateStickFromMouse(e){
-    const dx = e.clientX - stickCenter.x;
-    const dy = e.clientY - stickCenter.y;
-    let nx = dx / MAX_RADIUS;
-    let nz = -dy / MAX_RADIUS;
-    const len = Math.hypot(nx, nz);
-    if(len > 1){ nx /= len; nz /= len; }
-    joystick.x = nx; joystick.z = nz;
-    const knobX = Math.max(-MAX_RADIUS, Math.min(MAX_RADIUS, dx));
-    const knobY = Math.max(-MAX_RADIUS, Math.min(MAX_RADIUS, dy));
-    stickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
-    stickKnob.style.background = "rgba(255,255,255,0.32)";
+    // mouse fallback for debug
+    let mouseDown = false;
+    stickArea.addEventListener("mousedown", (e) => {
+      mouseDown = true;
+      activePointerId = "mouse";
+      updateStickFromPoint(e.clientX, e.clientY);
+    });
+    window.addEventListener("mousemove", (e) => { if(mouseDown) updateStickFromPoint(e.clientX, e.clientY); });
+    window.addEventListener("mouseup", () => { if(mouseDown){ mouseDown=false; activePointerId=null; joystick.x=0; joystick.z=0; resetKnob(); } });
   }
 }
 
@@ -235,6 +239,10 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   updateStickCenter();
 });
+
+// カメラ高さ固定ロジック用
+const CAMERA_Y_OFFSET = 10;
+let lastGroundCameraY = player.position.y + CAMERA_Y_OFFSET;
 
 // ゲームループ
 function animate(){
@@ -247,8 +255,7 @@ function animate(){
   const moveRight = keys["d"] || keys["ArrowRight"] || joystick.x > 0.15;
   const jumpKey = keys[" "] || keys["Space"] || jumpPressed;
 
-  // スティックの連続的な移動（滑らかに）
-  // joystick.x は -1..1, joystick.z は -1..1
+  // スティックの連続的な移動（滑らか）
   player.position.x += joystick.x * MOVE_SPEED;
   player.position.z += joystick.z * MOVE_SPEED;
 
@@ -259,7 +266,8 @@ function animate(){
   if(moveRight && Math.abs(joystick.x) <= 0.15) player.position.x += MOVE_SPEED;
 
   // ジャンプ（地面にいるときのみ）
-  if(jumpKey && player.position.y <= 0.51){
+  const onGround = player.position.y <= 0.51;
+  if(jumpKey && onGround){
     velocityY = JUMP_POWER;
   }
 
@@ -285,11 +293,15 @@ function animate(){
   goal.rotation.y += 0.02;
   if(isColliding(player, goal)) showClear();
 
-  // カメラ追従（見下ろし）
+  // カメラ追従（ジャンプ中は高さを固定して視点ブレを防止）
+  if(onGround){
+    // 地面にいるときはカメラ高さを更新
+    lastGroundCameraY = player.position.y + CAMERA_Y_OFFSET;
+  }
   camera.position.x = player.position.x;
-  camera.position.y = player.position.y + 10;
+  camera.position.y = lastGroundCameraY; // ジャンプ中は lastGroundCameraY を使う
   camera.position.z = player.position.z - 15;
-  camera.lookAt(player.position.x, player.position.y, player.position.z + 10);
+  camera.lookAt(player.position.x, player.position.y + 2, player.position.z + 10);
 
   renderer.render(scene, camera);
 }
